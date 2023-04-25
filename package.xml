@@ -1,9 +1,9 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>goalie_robot</name>
+  <name>goaliebot</name>
   <version>1.3.2</version>
   <description>
-    The goalie_robot package
+    The goaliebot package
   </description>
   <license>Apache 2.0</license>
   <author email="pyo@robotis.com">Pyo</author>
