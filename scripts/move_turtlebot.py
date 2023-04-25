@@ -4,18 +4,11 @@ import rospy
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import LaserScan
 
-rospy.init_node('topic_publisher')
-pub = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
-sub = rospy.Subscriber('/scan', LaserScan, queue_size=10)
-rate = rospy.Rate(2)
-move = Twist()
-#move.linear.x = .1
-#move.angular.z = .5
+def laserscan_callback():
+    print("boop")
 
-ball_direction = "left"
 
 def control_loop(direction):
-    print("check")
     if ball_direction == "left":
         move.linear.x = .2
 
@@ -26,10 +19,19 @@ def control_loop(direction):
         move.angular.z = .2
 
 
+rospy.init_node('topic_publisher')
+pub = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
+sub = rospy.Subscriber('/scan', LaserScan, laserscan_callback())
+rate = rospy.Rate(2)
+move = Twist()
+
+ball_direction = "left"
+
+
+##########  MAIN LOOP ##########
 while not rospy.is_shutdown():
     pub.publish(move)
     rate.sleep()
 
     control_loop(ball_direction)
     
-
