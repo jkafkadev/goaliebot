@@ -1,20 +1,43 @@
 #!/usr/bin/env python
 
+import math
+import time
+
 import rospy
 from tf import transformations
-from geometry_msgs.msg import Twist, Vector3
+from tf.transformations import euler_from_quaternion
+from geometry_msgs.msg import Twist, Point
 from sensor_msgs.msg import LaserScan
-import time
+from nav_msgs.msg import Odometry
 
 scan: LaserScan = LaserScan()
 on_goal_line: bool = False
 
-ball_position = None
-position_time = None
+
+#######################  Global Variables  #######################
+###########  Bot State Variables  ###########
+orientation = None                                                  # Orientation quaternion of bot
+position = None                                                     # Position of robot
+roll = None
+pitch = None
+yaw = None
+
+isTurning = False                                                   # True while the bot is turning (DEPRECIATED (hopefully))
+
+destination = [0, 0, 0]                                             # List used to store where the ball
+
+###########  Ball State Variables  ###########
+ball_position = None                                                # Current position of the ball based on lidar scans
+position_time = None                                                # Time associated with the last ball position reading
 ball_velocity = None
 counter = 10
+
+########  LaserScan State Variables  #########
 done = False
 xg = None
+
+
+position_test = [0, 0, 0]
 
 def find_ball_position(distance, angle):
     return [distance*transformations.math.cos(angle), distance*transformations.math.sin(angle)]
@@ -27,6 +50,15 @@ def find_ball_velocity(position_1, position_2, time_1, time_2):
         velocity.append(change_in_position / change_in_time)
     return velocity
 
+def odom_callback(msg):
+    print("here")
+    global orientation, roll, pitch, yaw, position
+    orientation_msg = msg.pose.pose.orientation
+    position_msg = msg.pose.pose.position
+    orientation = [orientation_msg.x, orientation_msg.y, orientation_msg.z, orientation_msg.w]
+    position = [position_msg.x, position_msg.y, position_msg.z]
+    (roll, pitch, yaw) = euler_from_quaternion(orientation)
+    print(position_msg.x)
 
 def laserscan_callback(msg: LaserScan):
     global scan
@@ -96,22 +128,24 @@ def find_posts():
             if (scan.ranges[i] < post_2_distance):
                 post_2_distance = scan.ranges[i]
                 post_2_angle = i
-
-    return {
-        'post_1': {
-            'angle': post_1_angle,
-            'distance': post_1_distance
-        },
-        'post_2': {
-            'angle': post_2_angle,
-            'distance': post_2_distance
+    if not post_1_set:
+        return None
+    else: 
+        return {
+            'post_1': {
+                'angle': post_1_angle,
+                'distance': post_1_distance
+            },
+            'post_2': {
+                'angle': post_2_angle,
+                'distance': post_2_distance
+            }
         }
-    }
 
 
 
 
-def control_loop(xg):
+def control_loop(xg, move):
     time_to_drive = xg / .2
     if (xg > 0):
         move.linear.x = .2
@@ -120,36 +154,95 @@ def control_loop(xg):
     time.sleep(time_to_drive)
     move.linear.x = 0
 
-rospy.init_node('topic_publisher')
-cmd_vel_pub = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
-scan_sub = rospy.Subscriber('/scan', LaserScan, laserscan_callback)
-rate = rospy.Rate(2)
-move = Twist()
+
+def go_to(destination, move_cmd):
+    global position, yaw, isTurning, inPlace
+    goal_direction = [x - y for x,y in zip(destination,position)]
+    mag = math.sqrt(sum([x**2 for x in goal_direction]))
+
+    goal_direction_angle = math.acos(float(goal_direction[0])/float(mag))
+    if (goal_direction[1] > 0):
+        goal_direction_angle =  - goal_direction_angle
+
+    turn_angle = goal_direction_angle - yaw
+
+    if turn_angle > math.pi:
+        turn_angle = turn_angle - (2 * math.pi)
+    if turn_angle < -math.pi:
+        turn_angle = turn_angle + (2 * math.pi)
+    
 
 
+    #move_cmd.angular.z = 0.1
+    #print("goal: " + str(goal_direction_angle))
+    #print("orient: " + str(yaw))
+    print("turn: " + str(turn_angle))
+
+#    if isTurning:
+#        print("ye")
+#        if (abs(turn_angle) < 0.03):
+#            isTurning = False
+#        else:
+#            move_cmd.angular.z = turn_angle
+#    else:
+#        print("ne")
+#        move_cmd.linear.x = 1
+#        move_cmd.angular.z = 0
+
+    if (abs(turn_angle) < 0.1):
+        move_cmd.angular.z = 0
+    else:
+        move_cmd.angular.z = turn_angle
+
+    if (turn_angle < math.pi):
+        move_cmd.linear.x = mag / 5
+        pass
+
+
+    if mag < 0.2:
+        move_cmd.linear.x = 0
+        move_cmd.angular.z = 0
+        return True
 
 
 ##########  MAIN LOOP ##########
-while not rospy.is_shutdown():
-    # Find posts
-    posts = find_posts()
-    if posts['post_1']['distance'] == 500:
+def goalie():
+    global destination
+    rospy.init_node('topic_publisher')
+    move = Twist()
+
+    cmd_vel_pub = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
+    scan_sub = rospy.Subscriber('/scan', LaserScan, laserscan_callback)
+
+    state = "FIND_GOAL"
+    rate = rospy.Rate(10)
+    while not rospy.is_shutdown():
+        if (state == "FIND_GOAL"):                              # FIND GOAL POSTS
+            posts = find_posts()
+            if posts:
+                # TODO: Convert posts to coordinates for bot to go to and store in destination
+                state = "GO_TO_GOAL"
+
+            if not on_goal_line: # Find direction to goal line
+                print('get to goal line')
+                continue
+
+        elif (state == "GO_TO_GOAL"):                           # MOVE TO DEFEND POSITION
+            inPlace = go_to(destination, move)
+            state = "PREDICT_BALL" if inPlace else state
+
+        elif (state == "PREDICT_BALL"):                         # SCAN FOR AND PREDICT BALL MOVEMENT
+            pass                                                # TODO: This. Store predicted location in destination
+        elif (state == "BLOCK_BALL"):                           # MOVE TO BLOCK THE BALL
+            go_to(destination, move)
+        else:
+            print("INVALID STATE")
+
+
+        #cmd_vel_pub.publish(move)
         rate.sleep()
-        continue
 
-    if not on_goal_line: # Find direction to goal line
-        print('get to goal line')
-        continue
-    
-    # Rotate to be in line with goal
+        #control_loop(ball_direction, move)
 
-    # Find ball
-
-    # Move to stop ball
-
-
-    #pub.publish(move)
-    rate.sleep()
-
-    #control_loop(ball_direction)
-    
+if __name__ == "__main__":
+    goalie()    
