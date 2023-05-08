@@ -179,8 +179,7 @@ def go_to(destination, move_cmd):
     goal_direction = [x - y for x,y in zip(destination,position)]
     mag = math.sqrt(sum([x**2 for x in goal_direction]))
 
-    #goal_direction_angle = math.acos(float(goal_direction[0])/float(mag))
-    goal_direction_angle = math.atan(float(goal_direction[1])/goal_direction[0])
+    goal_direction_angle = math.acos(float(goal_direction[0])/float(mag))
     if (goal_direction[1] < 0):
         goal_direction_angle =  - goal_direction_angle
 
@@ -192,7 +191,6 @@ def go_to(destination, move_cmd):
         turn_angle = turn_angle + (2 * math.pi)
     
 
-
     #move_cmd.angular.z = 0.1
     #print("goal: " + str(goal_direction_angle))
     #print("orient: " + str(yaw))
@@ -202,6 +200,7 @@ def go_to(destination, move_cmd):
         print("ye")
         if (abs(turn_angle) < 0.03):
             isTurning = False
+            move_cmd.angular.z = 0
         else:
             move_cmd.angular.z = turn_angle
     else:
