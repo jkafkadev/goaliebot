@@ -13,23 +13,31 @@ from nav_msgs.msg import Odometry
 scan: LaserScan = LaserScan()
 on_goal_line: bool = False
 
-ball_position = None
-position_time = None
-ball_velocity = None
-counter = 10
-done = False
-xg = None
 
-orientation = None
-position = None
+#######################  Global Variables  #######################
+###########  Bot State Variables  ###########
+orientation = None                                                  # Orientation quaternion of bot
+position = None                                                     # Position of robot
 roll = None
 pitch = None
 yaw = None
 
-isTurning = False
-inPlace = True
+isTurning = False                                                   # True while the bot is turning (DEPRECIATED (hopefully))
+
+destination = [0, 0, 0]                                             # List used to store where the ball
+
+###########  Ball State Variables  ###########
+ball_position = None                                                # Current position of the ball based on lidar scans
+position_time = None                                                # Time associated with the last ball position reading
+ball_velocity = None
+counter = 10
+
+########  LaserScan State Variables  #########
+done = False
+xg = None
+
+
 position_test = [0, 0, 0]
-destination = [0, 0, 0]
 
 def find_ball_position(distance, angle):
     return [distance*transformations.math.cos(angle), distance*transformations.math.sin(angle)]
