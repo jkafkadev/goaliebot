@@ -88,6 +88,7 @@ def laserscan_callback(msg: LaserScan):
     global lidar_once
     lidar_once = True
     scan = msg
+
     
 
 def store_ball_position():
@@ -103,6 +104,8 @@ def store_ball_position():
     ball_hits = []
     ball_angles = []
     for i in range(300, 360):
+        if (scan.ranges[i] < scan.range_min or scan.ranges[i] > scan.range_max):
+            continue
         if scan.ranges[i] < minDistance:
             minDistance = scan.ranges[i]
             minAngle = i
@@ -110,6 +113,8 @@ def store_ball_position():
             ball_hits.append(scan.ranges[i])
             ball_angles.append(i)
     for i in range(0, 60):
+        if (scan.ranges[i] < scan.range_min or scan.ranges[i] > scan.range_max):
+            continue
         if scan.ranges[i] < minDistance:
             minDistance = scan.ranges[i]
             minAngle = i
@@ -133,23 +138,35 @@ def find_posts_v1():
     post_2_set = False
 
     for i in range(len(scan.ranges)):
-        if scan.ranges[i] > 5:
-            if post_1_distance < 5:
+
+        if scan.ranges[i] < scan.range_min or scan.ranges[i] > scan.range_max:
+            continue
+
+        if scan.ranges[i] > 0.8:
+            if post_1_distance < 0.8:
                 post_1_set = True
-            if post_2_distance < 5:
+            if post_2_distance < 0.8:
                 post_2_set = True
             continue
-        if not post_1_set or post_2_set:
-            post_1_range.append(i)
+        if not post_1_set:
             if (scan.ranges[i] < post_1_distance):
                 post_1_distance = scan.ranges[i]
                 post_1_angle = i * math.pi / 180
 
         elif not post_2_set:
-            post_2_range.append(i)
             if (scan.ranges[i] < post_2_distance):
                 post_2_distance = scan.ranges[i]
                 post_2_angle = i * math.pi / 180
+
+    print(post_1_distance)
+    #min = 100
+    #ind = -1
+    #for i in range(len(scan.ranges)):
+    #    if scan.ranges[i] < scan.range_min or scan.ranges[i] > scan.range_max:
+    #        continue
+    #    if scan.ranges[i] < min:
+    #        min = scan.ranges[i]
+    #        ind = i
 
     if not post_1_set:
         return None
