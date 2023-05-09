@@ -87,6 +87,7 @@ def laserscan_callback(msg: LaserScan):
     global lidar_once
     lidar_once = True
     scan = msg
+
     
 
 def store_ball_position():
@@ -102,6 +103,8 @@ def store_ball_position():
     ball_hits = []
     ball_angles = []
     for i in range(300, 360):
+        if (scan.ranges[i] < scan.range_min or scan.ranges[i] > scan.range_max):
+            continue
         if scan.ranges[i] < minDistance:
             minDistance = scan.ranges[i]
             minAngle = i
@@ -109,6 +112,8 @@ def store_ball_position():
             ball_hits.append(scan.ranges[i])
             ball_angles.append(i)
     for i in range(0, 60):
+        if (scan.ranges[i] < scan.range_min or scan.ranges[i] > scan.range_max):
+            continue
         if scan.ranges[i] < minDistance:
             minDistance = scan.ranges[i]
             minAngle = i
@@ -116,11 +121,14 @@ def store_ball_position():
             ball_hits.append(scan.ranges[i])
             ball_angles.append(i)
     for i in range(len(scan.ranges)):
+        if (scan.ranges[i] < scan.range_min or scan.ranges[i] > scan.range_max):
+            continue
         if scan.ranges[i] < 10:
             ball_hits.append(scan.ranges[i])
             ball_angles.append(i)
     ball_distance = ball_hits[transformations.math.floor(len(ball_hits)/2)]
     ball_angle = ball_angles[transformations.math.floor(len(ball_angles)/2)]*transformations.math.pi/180
+    #print("dis: " + str())
     return find_xy_position(ball_distance, ball_angle)
 
 def find_posts_v1():
@@ -135,23 +143,35 @@ def find_posts_v1():
     post_2_set = False
 
     for i in range(len(scan.ranges)):
-        if scan.ranges[i] > 5:
-            if post_1_distance < 5:
+
+        if scan.ranges[i] < scan.range_min or scan.ranges[i] > scan.range_max:
+            continue
+
+        if scan.ranges[i] > 0.8:
+            if post_1_distance < 0.8:
                 post_1_set = True
-            if post_2_distance < 5:
+            if post_2_distance < 0.8:
                 post_2_set = True
             continue
-        if not post_1_set or post_2_set:
-            post_1_range.append(i)
+        if not post_1_set:
             if (scan.ranges[i] < post_1_distance):
                 post_1_distance = scan.ranges[i]
                 post_1_angle = i * math.pi / 180
 
         elif not post_2_set:
-            post_2_range.append(i)
             if (scan.ranges[i] < post_2_distance):
                 post_2_distance = scan.ranges[i]
                 post_2_angle = i * math.pi / 180
+
+    print(post_1_distance)
+    #min = 100
+    #ind = -1
+    #for i in range(len(scan.ranges)):
+    #    if scan.ranges[i] < scan.range_min or scan.ranges[i] > scan.range_max:
+    #        continue
+    #    if scan.ranges[i] < min:
+    #        min = scan.ranges[i]
+    #        ind = i
 
     if not post_1_set:
         return None
@@ -303,7 +323,7 @@ def goalie():
     odom_sub = rospy.Subscriber('/odom', Odometry, odom_callback)
 
     state = "FIND_GOAL"
-    rate = rospy.Rate(1)
+    rate = rospy.Rate(10)
     while (not (odom_once and lidar_once)):
         pass
     while not rospy.is_shutdown():
@@ -332,7 +352,7 @@ def goalie():
 
         elif (state == "PREDICT_BALL"):                         # SCAN FOR AND PREDICT BALL MOVEMENT
             pos_1 = store_ball_position()
-            rospy.sleep(10)
+            rospy.sleep(1)
             pos_2 = store_ball_position()
             print(f'Position 1: {pos_1}')
             print(f'Position 2: {pos_2}')
