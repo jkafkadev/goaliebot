@@ -33,6 +33,7 @@ yaw = None
 predicted_1 = None
 predicted_2 = None
 initial_mag = None
+mag_prev = 100
 
 isTurning = False
 inPlace = True
@@ -120,15 +121,9 @@ def store_ball_position():
         if scan.ranges[i] < 10:
             ball_hits.append(scan.ranges[i])
             ball_angles.append(i)
-    for i in range(len(scan.ranges)):
-        if (scan.ranges[i] < scan.range_min or scan.ranges[i] > scan.range_max):
-            continue
-        if scan.ranges[i] < 10:
-            ball_hits.append(scan.ranges[i])
-            ball_angles.append(i)
     ball_distance = ball_hits[transformations.math.floor(len(ball_hits)/2)]
     ball_angle = ball_angles[transformations.math.floor(len(ball_angles)/2)]*transformations.math.pi/180
-    #print("dis: " + str())
+    print("Ball Distance: " + str(ball_distance) + "Ball Angle: " + str(ball_angle))
     return find_xy_position(ball_distance, ball_angle)
 
 def find_posts_v1():
@@ -252,7 +247,7 @@ def control_loop(xg, move):
 
 
 def go_to(destination, move_cmd):
-    global position, yaw, isTurning, inPlace, initial_mag
+    global position, yaw, isTurning, inPlace, initial_mag, mag_prev
     goal_direction = [x - y for x,y in zip(destination,position)]
     mag = math.sqrt(sum([x**2 for x in goal_direction]))
     if not initial_mag:
@@ -284,14 +279,16 @@ def go_to(destination, move_cmd):
             move_cmd.angular.z = turn_angle
     else:
         print("ne")
-        move_cmd.linear.x = .22 * mag / initial_mag
+        move_cmd.linear.x = .22 #* mag / initial_mag
         move_cmd.angular.z = 0
 
     print("mag: " + str(mag))
-    if mag < 0.2:
+    if mag < 0.15 or mag_prev+.01 < mag:
         move_cmd.linear.x = 0
         move_cmd.angular.z = 0
         return True
+
+    mag_prev = mag
 
 """     if (abs(turn_angle) < 0.1):
         move_cmd.angular.z = 0
@@ -352,8 +349,24 @@ def goalie():
 
         elif (state == "PREDICT_BALL"):                         # SCAN FOR AND PREDICT BALL MOVEMENT
             pos_1 = store_ball_position()
-            rospy.sleep(1)
+            rospy.sleep(.1)
+            pos_12 = store_ball_position()
+            rospy.sleep(.1)
+            pos_13 = store_ball_position()
+            pos_1[0] = float((pos_1[0] + pos_12[0] + pos_13[0]))/3
+            pos_1[1] = float((pos_1[1] + pos_12[1] + pos_13[1]))/3
+
+            rospy.sleep(5)
             pos_2 = store_ball_position()
+            rospy.sleep(.1)
+            pos_22 = store_ball_position()
+            rospy.sleep(.1)
+            pos_23 = store_ball_position()
+            pos_2[0] = float((pos_2[0] + pos_22[0] + pos_23[0]))/3
+            pos_2[1] = float((pos_2[1] + pos_22[1] + pos_23[1]))/3
+
+            
+
             print(f'Position 1: {pos_1}')
             print(f'Position 2: {pos_2}')
             y_G = predict_ball_position(pos_1, pos_2)
@@ -362,7 +375,9 @@ def goalie():
             state = "BLOCK_BALL"                            # TODO: This. Store predicted location in destination
         elif (state == "BLOCK_BALL"):                           # MOVE TO BLOCK THE BALL
             print(destination)
-            go_to(destination, move)                            # NOTE/TODO: WILL NEED TO RESET POSITION TO BE RELATIVE TO ITSELF AGAIN (I THINK??)
+            inPosition = go_to(destination, move)                            # NOTE/TODO: WILL NEED TO RESET POSITION TO BE RELATIVE TO ITSELF AGAIN (I THINK??)
+            if inPosition:
+                state = "Blocked"
         else:
             print("INVALID STATE")
         print(state)
