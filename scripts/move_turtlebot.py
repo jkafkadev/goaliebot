@@ -145,23 +145,35 @@ def find_posts_v1():
     post_2_set = False
 
     for i in range(len(scan.ranges)):
-        if scan.ranges[i] > 5:
-            if post_1_distance < 5:
+
+        if scan.ranges[i] < scan.range_min or scan.ranges[i] > scan.range_max:
+            continue
+
+        if scan.ranges[i] > 0.8:
+            if post_1_distance < 0.8:
                 post_1_set = True
-            if post_2_distance < 5:
+            if post_2_distance < 0.8:
                 post_2_set = True
             continue
-        if not post_1_set or post_2_set:
-            post_1_range.append(i)
+        if not post_1_set:
             if (scan.ranges[i] < post_1_distance):
                 post_1_distance = scan.ranges[i]
                 post_1_angle = i * math.pi / 180
 
         elif not post_2_set:
-            post_2_range.append(i)
             if (scan.ranges[i] < post_2_distance):
                 post_2_distance = scan.ranges[i]
                 post_2_angle = i * math.pi / 180
+
+    print(post_1_distance)
+    #min = 100
+    #ind = -1
+    #for i in range(len(scan.ranges)):
+    #    if scan.ranges[i] < scan.range_min or scan.ranges[i] > scan.range_max:
+    #        continue
+    #    if scan.ranges[i] < min:
+    #        min = scan.ranges[i]
+    #        ind = i
 
     if not post_1_set:
         return None
@@ -189,13 +201,19 @@ def find_posts():
 
     for i in range(length):
         j = length - (i + 1)
-        if (scan.ranges[i] < 5 and i < stopI):
+
+        if scan.ranges[i] < scan.range_min or scan.ranges[i] > scan.range_max:
+            continue
+
+
+        print(scan.ranges[i])
+        if (scan.ranges[i] < 0.75 and i < stopI):
             post_1_ranges.append(i)
             stopJ = -2
         elif (len(post_1_ranges) > 0 and stopJ == -2):
             stopJ = i
 
-        if (scan.ranges[j] < 5 and j > stopJ):
+        if (scan.ranges[j] < 0.5 and j > stopJ):
             post_2_ranges.append(j)
             stopI = 10001
         elif (len(post_1_ranges) > 0 and stopI == 10001):
@@ -252,6 +270,11 @@ def go_to(destination, move_cmd):
 
     turn_angle = goal_direction_angle - yaw
 
+    print(goal_direction_angle)
+    print(yaw)
+
+
+    print("turn: " + str(turn_angle))
     if turn_angle > math.pi:
         turn_angle = turn_angle - (2 * math.pi)
     if turn_angle < -math.pi:
@@ -276,7 +299,7 @@ def go_to(destination, move_cmd):
         move_cmd.angular.z = 0
 
     print("mag: " + str(mag))
-    if mag < 0.2:
+    if mag < 0.05:
         move_cmd.linear.x = 0
         move_cmd.angular.z = 0
         return True
@@ -311,11 +334,12 @@ def goalie():
     odom_sub = rospy.Subscriber('/odom', Odometry, odom_callback)
 
     state = "FIND_GOAL"
-    rate = rospy.Rate(1)
+    rate = rospy.Rate(10)
     while (not (odom_once and lidar_once)):
         pass
     while not rospy.is_shutdown():
         if (state == "FIND_GOAL"):                              # FIND GOAL POSTS
+            #print("neat x 2")
             posts = find_posts_v1()                             # NOTE/TODO: Just need to make sure to note that the ball cant be too close during this process (ALSO REMOVE OTHER VERSION)
             if posts:
                 # TODO: Convert posts to coordinates for bot to go to and store in destination
@@ -328,10 +352,9 @@ def goalie():
                 state = "GO_TO_GOAL"
                 #destination = [1, 0, 0]
                 isTurning = True
+                input("proceed?")
 
-            if not on_goal_line: # Find direction to goal line
-                #print('get to goal line')
-                continue
+            #print("neat x 3")
 
         elif (state == "GO_TO_GOAL"):                           # MOVE TO DEFEND POSITION
             inPlace = go_to(destination, move)
