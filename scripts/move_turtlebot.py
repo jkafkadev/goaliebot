@@ -21,10 +21,13 @@ counter = 10
 done = False
 xg = None
 
+yaw_sign = None
+
 odom_once = False
 lidar_once = False
 
 init_position = None
+init_yaw = None
 orientation = None
 position = None
 roll = None
@@ -37,6 +40,8 @@ isTurning = False
 inPlace = True
 position_test = [0, 0, 0]
 position = [0, 0, 0]
+
+posts = None
 
 def find_xy_position(distance, angle):
     return [distance*transformations.math.cos(angle), distance*transformations.math.sin(angle)]
@@ -72,16 +77,17 @@ def predict_ball_position():
     
 
 def odom_callback(msg):
-    global orientation, roll, pitch, yaw, position, init_position, odom_once
+    global orientation, roll, pitch, yaw, position, init_position, odom_once, init_yaw
     odom_once = True
     orientation_msg = msg.pose.pose.orientation
     position_msg = msg.pose.pose.position
     orientation = [orientation_msg.x, orientation_msg.y, orientation_msg.z, orientation_msg.w]
     if (init_position == None):
-        init_position = [position_msg.x, position_msg.y, position_msg.z]
+        init_position = [0, 0, 0]
+        init_yaw = 0
     position = [position_msg.x - init_position[0], position_msg.y - init_position[1], position_msg.z - init_position[2]]
-    #position = [0, 0, 0]
     (roll, pitch, yaw) = euler_from_quaternion(orientation)
+    yaw -= init_yaw
     #print(position_msg.x)
 
 def laserscan_callback(msg: LaserScan):
@@ -258,6 +264,49 @@ def control_loop(xg, move):
     time.sleep(time_to_drive)
     move.linear.x = 0
 
+def rotate_goal(move_cmd):
+    global posts, yaw_sign
+    if posts == None:
+        posts = find_posts_v1()
+
+    ang_1 = posts["post_1"]["angle"] - posts["post_2"]["angle"]
+    ang_2 = posts["post_1"]["angle"] - posts["post_2"]["angle"]
+
+    if abs(ang_1) > abs(ang_2):
+        ori_angle = ang_1
+    else:
+        ori_angle = ang_2
+
+
+    # ori_angle = max(posts["post_1"]["angle"] - posts["post_2"]["angle"], posts["post_1"]["angle"] - posts["post_2"]["angle"])
+
+    if (ori_angle > math.pi):
+        ori_angle = -2*math.pi + ori_angle
+
+    turn_angle = ori_angle - yaw
+    
+    
+    if turn_angle > math.pi:
+        turn_angle = turn_angle - (2 * math.pi)
+    if turn_angle < -math.pi:
+        turn_angle = turn_angle + (2 * math.pi)
+
+    print("Yaw: " + str(yaw))
+    print("Goal angle: " + str(max(posts["post_1"]["angle"] - posts["post_2"]["angle"], posts["post_1"]["angle"] - posts["post_2"]["angle"])))
+
+    print(turn_angle)
+    if (abs(turn_angle) > 0.03 or abs(turn_angle) > (math.pi * 2)):
+        # if turn_angle > .5:
+        #     move_cmd.angular.z = 1.5
+        # else:
+        #     move_cmd.angular.z = .5
+        move_cmd.angular.z = turn_angle
+        print("rotate_goal" + str(turn_angle))
+        return False
+    
+    print("rotate_goal" + str(turn_angle))
+    move_cmd.angular.z = 0
+    return True
 
 def go_to(destination, move_cmd):
     global position, yaw, isTurning, inPlace
@@ -270,11 +319,11 @@ def go_to(destination, move_cmd):
 
     turn_angle = goal_direction_angle - yaw
 
-    print(goal_direction_angle)
-    print(yaw)
+    #print(goal_direction_angle)
+    #print(yaw)
 
 
-    print("turn: " + str(turn_angle))
+    #print("turn: " + str(turn_angle))
     if turn_angle > math.pi:
         turn_angle = turn_angle - (2 * math.pi)
     if turn_angle < -math.pi:
@@ -284,7 +333,8 @@ def go_to(destination, move_cmd):
     #move_cmd.angular.z = 0.1
     #print("goal: " + str(goal_direction_angle))
     #print("orient: " + str(yaw))
-    print("turn: " + str(turn_angle))
+    
+    #print("turn: " + str(turn_angle))
 
     if isTurning:
         print("ye")
@@ -326,6 +376,7 @@ def goalie():
     global position
     global isTurning
     global odom_once, lidar_once
+    global yaw_sign
     rospy.init_node('topic_publisher')
     move = Twist()
 
@@ -345,6 +396,8 @@ def goalie():
                 # TODO: Convert posts to coordinates for bot to go to and store in destination
                 post_1_xy = find_xy_position(posts["post_1"]["distance"], posts["post_1"]["angle"])
                 post_2_xy = find_xy_position(posts["post_2"]["distance"], posts["post_2"]["angle"])
+                print(posts["post_1"]["angle"])
+                print(posts["post_2"]["angle"])
                 print("post 1: " + str(post_1_xy))
                 print("post 2: " + str(post_2_xy))
                 destination = [(post_1_xy[0]+post_2_xy[0])/2, (post_1_xy[1]+post_2_xy[1])/2, 0] 
@@ -352,14 +405,23 @@ def goalie():
                 state = "GO_TO_GOAL"
                 #destination = [1, 0, 0]
                 isTurning = True
+
+                init_yaw = 0
+                init_position = [0, 0, 0]
+                yaw_sign = 1 if yaw >= 0 else -1
+
                 input("proceed?")
 
             #print("neat x 3")
 
         elif (state == "GO_TO_GOAL"):                           # MOVE TO DEFEND POSITION
             inPlace = go_to(destination, move)
+            inOri = False
+            if inPlace:
+                inOri = rotate_goal(move)
+                print("here")
             print("destination" + str(destination))
-            state = "PREDICT_BALL" if inPlace else state
+            state = "PREDICT_BALL" if inOri else state
 
         elif (state == "PREDICT_BALL"):                         # SCAN FOR AND PREDICT BALL MOVEMENT
             #pos_1 = store_ball_position()
