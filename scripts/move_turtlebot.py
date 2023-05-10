@@ -103,6 +103,8 @@ def store_ball_position():
     ball_hits = []
     ball_angles = []
     for i in range(300, 360):
+        if (scan.ranges[i] < scan.range_min or scan.ranges[i] > scan.range_max):
+            continue
         if scan.ranges[i] < minDistance:
             minDistance = scan.ranges[i]
             minAngle = i
@@ -110,12 +112,16 @@ def store_ball_position():
             ball_hits.append(scan.ranges[i])
             ball_angles.append(i)
     for i in range(0, 60):
+        if (scan.ranges[i] < scan.range_min or scan.ranges[i] > scan.range_max):
+            continue
         if scan.ranges[i] < minDistance:
             minDistance = scan.ranges[i]
             minAngle = i
-        if scan.ranges[i] < 10:
+        if scan.ranges[i] < scan.range_max:
             ball_hits.append(scan.ranges[i])
             ball_angles.append(i)
+    if (len(ball_hits) < 1):
+        return None
     ball_distance = ball_hits[transformations.math.floor(len(ball_hits)/2)]
     ball_angle = ball_angles[transformations.math.floor(len(ball_angles)/2)]*transformations.math.pi/180
     print("Ball Distance: " + str(ball_distance) + "Ball Angle: " + str(ball_angle))
@@ -255,16 +261,18 @@ def go_to(destination, move_cmd):
 
     if isTurning:
         print("ye")
-        if (abs(turn_angle) < 0.03):
+        if (abs(turn_angle) < 0.06):
             isTurning = False
             move_cmd.angular.z = 0
             
         else:
+
+            #move_cmd.angular.z = 2 * turn_angle
             
-            if turn_angle < .4 and turn_angle > 0:
-                move_cmd.angular.z = .5
-            elif turn_angle > -.4 and turn_angle < 0:
-                move_cmd.angular.z = -.5
+            if turn_angle < .5 and turn_angle > 0:
+                move_cmd.angular.z = .3
+            elif turn_angle > -.5 and turn_angle < 0:
+                move_cmd.angular.z = -.3
             else:
                 #move_cmd.angular.z = turn_angle
                 if turn_angle > 0:
@@ -315,7 +323,7 @@ def goalie():
     odom_sub = rospy.Subscriber('/odom', Odometry, odom_callback)
 
     state = "PREDICT_BALL"
-    rate = rospy.Rate(10)
+    rate = rospy.Rate(100)
     while (not (odom_once and lidar_once)):
         pass
     while not rospy.is_shutdown():
@@ -348,7 +356,7 @@ def goalie():
             #print(ranges_constr)
             did_loop_run = 0
 
-            if min(ranges_constr) > 4:
+            if min(ranges_constr) > 3:
                 continue
 
             #while min(ranges_constr) > 5.0 or not did_loop_run:
@@ -359,6 +367,8 @@ def goalie():
 
 
             pos_1 = store_ball_position()
+            if not pos_1:
+                continue
             #rospy.sleep(.05)
             #pos_12 = store_ball_position()
             #rospy.sleep(.05)
@@ -366,8 +376,10 @@ def goalie():
             #pos_1[0] = float((pos_1[0] + pos_12[0] + pos_13[0]))/3
             #pos_1[1] = float((pos_1[1] + pos_12[1] + pos_13[1]))/3
 
-            rospy.sleep(.7)
+            rospy.sleep(1)
             pos_2 = store_ball_position()
+            if not pos_1:
+                continue
             #rospy.sleep(.1)
             #pos_22 = store_ball_position()
             #rospy.sleep(.1)
@@ -380,7 +392,7 @@ def goalie():
             print(f'Position 1: {pos_1}')
             print(f'Position 2: {pos_2}')
             y_G = predict_ball_position(pos_1, pos_2)
-            destination = [0, y_G+(y_G*.04), 0]
+            destination = [0, y_G, 0]
             #did_loop_run = 1
 
             state = "BLOCK_BALL"                            # TODO: This. Store predicted location in destination
