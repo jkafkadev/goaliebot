@@ -51,24 +51,17 @@ def find_ball_velocity(position_1, position_2, time_1, time_2):
         velocity.append(change_in_position / change_in_time)
     return velocity
 
-# def store_ball_position():
-#     global ball_position
-#     global predicted_1
-#     global predicted_2
-
-#     if predicted_1 == None:
-#         predicted_1 = ball_position
-#     elif predicted_2 == None:
-#        predicted_2 = ball_position
-
-
 def predict_ball_position(pos_1, pos_2):
     m = (pos_2[1] - pos_1[1])/(pos_2[0] - pos_1[0])
-    y_G = pos_1[1] - m * pos_1[0]
-    return y_G
-    
+    y_int = pos_1[1] - m * pos_1[0]
 
+    x_G = -y_int/(m+(1/m))
+    y_G = -(1/m)*x_G
+
+    if x_G < 0:
+        return [0, y_int, 0]
     
+    return [x_G, y_G, 0]
 
 def odom_callback(msg):
     global orientation, roll, pitch, yaw, position, init_position, odom_once
@@ -79,9 +72,7 @@ def odom_callback(msg):
     if (init_position == None):
         init_position = [position_msg.x, position_msg.y, position_msg.z]
     position = [position_msg.x - init_position[0], position_msg.y - init_position[1], position_msg.z - init_position[2]]
-    #position = [0, 0, 0]
     (roll, pitch, yaw) = euler_from_quaternion(orientation)
-    #print(position_msg.x)
 
 def laserscan_callback(msg: LaserScan):
     global scan
@@ -91,10 +82,6 @@ def laserscan_callback(msg: LaserScan):
     
 
 def store_ball_position():
-    # print(f'Min angle: {msg.angle_min}')
-    # print(f'Max angle: {msg.angle_max}')
-    # print(f'Angle Increment: {msg.angle_increment}')
-    # print(f'# of ranges{len(msg.ranges)}')
     global scan
     global ball_position
     global position_time
@@ -124,10 +111,9 @@ def store_ball_position():
         return None
     ball_distance = ball_hits[transformations.math.floor(len(ball_hits)/2)]
     ball_angle = ball_angles[transformations.math.floor(len(ball_angles)/2)]*transformations.math.pi/180
-    print("Ball Distance: " + str(ball_distance) + "Ball Angle: " + str(ball_angle))
     return find_xy_position(ball_distance, ball_angle)
 
-def find_posts_v1():
+def find_posts():
     global scan
     post_1_distance = 500
     post_2_distance = 500
@@ -170,70 +156,6 @@ def find_posts_v1():
                 'distance': post_2_distance
             }
         }
-    
-def find_posts():
-    global scan
-
-    length = len(scan.ranges)
-    stopI = 10000
-    stopJ = -1
-
-    post_1_ranges = []
-    post_2_ranges = []
-
-    for i in range(length):
-        j = length - (i + 1)
-        if (scan.ranges[i] < 5 and i < stopI):
-            post_1_ranges.append(i)
-            stopJ = -2
-        elif (len(post_1_ranges) > 0 and stopJ == -2):
-            stopJ = i
-
-        if (scan.ranges[j] < 5 and j > stopJ):
-            post_2_ranges.append(j)
-            stopI = 10001
-        elif (len(post_1_ranges) > 0 and stopI == 10001):
-            stopI = j
-
-    if (len(post_1_ranges) == 0 or len(post_2_ranges) == 0):
-        return None
-
-    post_1_index = post_1_ranges[int(len(post_1_ranges)/2)]
-    post_2_index = post_2_ranges[int(len(post_2_ranges)/2)]
-
-    post_1_distance = scan.ranges[post_1_index]
-    post_1_angle = (post_1_index * scan.angle_increment) + scan.angle_min
-
-    post_2_distance = scan.ranges[post_2_index]
-    post_2_angle = (post_2_index * scan.angle_increment) + scan.angle_min
-
-    print("p1_ang: " + str(post_1_angle))
-    print("p2_ang: " + str(post_2_angle))
-    print("test: " + str(post_1_ranges))
-    print("testy: " + str(post_2_ranges))
-    return {
-        'post_1': {
-            'angle': post_1_angle,
-            'distance': post_1_distance
-        },
-        'post_2': {
-            'angle': post_2_angle,
-            'distance': post_2_distance
-        }
-    }
-
-
-
-
-def control_loop(xg, move):
-    time_to_drive = xg / .2
-    if (xg > 0):
-        move.linear.x = .2
-    elif (xg < 0):
-        move.linear.x = -.2
-    time.sleep(time_to_drive)
-    move.linear.x = 0
-
 
 def go_to(destination, move_cmd):
     global position, yaw, isTurning, inPlace, initial_mag, mag_prev
@@ -253,60 +175,34 @@ def go_to(destination, move_cmd):
     if turn_angle < -math.pi:
         turn_angle = turn_angle + (2 * math.pi)
     
-
-    #move_cmd.angular.z = 0.1
-    #print("goal: " + str(goal_direction_angle))
-    #print("orient: " + str(yaw))
-    print("turn: " + str(turn_angle))
-
     if isTurning:
-        print("ye")
         if (abs(turn_angle) < 0.06):
             isTurning = False
             move_cmd.angular.z = 0
             
         else:
 
-            #move_cmd.angular.z = 2 * turn_angle
             
             if turn_angle < .5 and turn_angle > 0:
                 move_cmd.angular.z = .3
             elif turn_angle > -.5 and turn_angle < 0:
                 move_cmd.angular.z = -.3
             else:
-                #move_cmd.angular.z = turn_angle
                 if turn_angle > 0:
                     move_cmd.angular.z = 1.5
                 elif turn_angle < 0:
                     move_cmd.angular.z = -1.5
             
     else:
-        print("ne")
         move_cmd.linear.x = .22 #* mag / initial_mag
         move_cmd.angular.z = 0
 
-    print("mag: " + str(mag))
     if mag < 0.15 or mag_prev+.01 < mag:
         move_cmd.linear.x = 0
         move_cmd.angular.z = 0
         return True
 
     mag_prev = mag
-
-"""     if (abs(turn_angle) < 0.1):
-        move_cmd.angular.z = 0
-    else:
-        move_cmd.angular.z = turn_angle
-
-    if (turn_angle < math.pi):
-        move_cmd.linear.x = mag / 5
-        pass """
-
-""" 
-    if mag < 0.2:
-        move_cmd.linear.x = 0
-        move_cmd.angular.z = 0
-        return True """
 
 
 ##########  MAIN LOOP ##########
@@ -328,88 +224,52 @@ def goalie():
         pass
     while not rospy.is_shutdown():
         if (state == "FIND_GOAL"):                              # FIND GOAL POSTS
-            posts = find_posts_v1()                             # NOTE/TODO: Just need to make sure to note that the ball cant be too close during this process (ALSO REMOVE OTHER VERSION)
+            posts = find_posts()                             
             if posts:
-                # TODO: Convert posts to coordinates for bot to go to and store in destination
                 post_1_xy = find_xy_position(posts["post_1"]["distance"], posts["post_1"]["angle"])
                 post_2_xy = find_xy_position(posts["post_2"]["distance"], posts["post_2"]["angle"])
-                print("post 1: " + str(post_1_xy))
-                print("post 2: " + str(post_2_xy))
                 destination = [(post_1_xy[0]+post_2_xy[0])/2, (post_1_xy[1]+post_2_xy[1])/2, 0] 
-                print("position: " + str(position))
                 state = "GO_TO_GOAL"
-                #destination = [1, 0, 0]
                 isTurning = True
 
             if not on_goal_line: # Find direction to goal line
-                #print('get to goal line')
                 continue
 
         elif (state == "GO_TO_GOAL"):                           # MOVE TO DEFEND POSITION
             inPlace = go_to(destination, move)
-            print("destination" + str(destination))
             state = "PREDICT_BALL" if inPlace else state
 
         elif (state == "PREDICT_BALL"):                         # SCAN FOR AND PREDICT BALL MOVEMENT
             isTurning = True
             ranges_constr = list(scan.ranges[300:360]) + list(scan.ranges[0:60])
-            #print(ranges_constr)
             did_loop_run = 0
 
             if min(ranges_constr) > 3:
                 continue
 
-            #while min(ranges_constr) > 5.0 or not did_loop_run:
-
-            # ranges_constr = list(scan.ranges[300:360]) + list(scan.ranges[0:60])
-            # print(min(ranges_constr))
-            # print("predict loop ran")
-
-
             pos_1 = store_ball_position()
             if not pos_1:
                 continue
-            #rospy.sleep(.05)
-            #pos_12 = store_ball_position()
-            #rospy.sleep(.05)
-            #pos_13 = store_ball_position()
-            #pos_1[0] = float((pos_1[0] + pos_12[0] + pos_13[0]))/3
-            #pos_1[1] = float((pos_1[1] + pos_12[1] + pos_13[1]))/3
 
             rospy.sleep(1)
             pos_2 = store_ball_position()
-            if not pos_1:
+            if not pos_2:
                 continue
-            #rospy.sleep(.1)
-            #pos_22 = store_ball_position()
-            #rospy.sleep(.1)
-            #pos_23 = store_ball_position()
-            #pos_2[0] = float((pos_2[0] + pos_22[0] + pos_23[0]))/3
-            #pos_2[1] = float((pos_2[1] + pos_22[1] + pos_23[1]))/3
 
-            
+            destination = predict_ball_position(pos_1, pos_2)
+            mag_destination = math.sqrt(destination[0]**2 + destination[1]**2)
+            if mag_destination < 0.0001:
+                continue
 
-            print(f'Position 1: {pos_1}')
-            print(f'Position 2: {pos_2}')
-            y_G = predict_ball_position(pos_1, pos_2)
-            destination = [0, y_G, 0]
-            #did_loop_run = 1
-
-            state = "BLOCK_BALL"                            # TODO: This. Store predicted location in destination
+            state = "BLOCK_BALL"                            
         elif (state == "BLOCK_BALL"):                           # MOVE TO BLOCK THE BALL
-            print(destination)
-            inPosition = go_to(destination, move)                            # NOTE/TODO: WILL NEED TO RESET POSITION TO BE RELATIVE TO ITSELF AGAIN (I THINK??)
-            # if inPosition:
-            #     state = "PREDICT_BALL"
+            go_to(destination, move)
             
         else:
             print("INVALID STATE")
-        print(state)
 
         cmd_vel_pub.publish(move)
         rate.sleep()
-
-        #control_loop(ball_direction, move)
 
 if __name__ == "__main__":
     goalie()    
