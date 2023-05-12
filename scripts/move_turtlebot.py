@@ -250,11 +250,23 @@ def goalie():
             pos_1 = store_ball_position()
             if not pos_1:
                 continue
+            #rospy.sleep(.05)
+            #pos_12 = store_ball_position()
+            #rospy.sleep(.05)
+            #pos_13 = store_ball_position()
+            #pos_1[0] = float((pos_1[0] + pos_12[0] + pos_13[0]))/3
+            #pos_1[1] = float((pos_1[1] + pos_12[1] + pos_13[1]))/3
 
             rospy.sleep(1)
             pos_2 = store_ball_position()
             if not pos_2:
                 continue
+            #rospy.sleep(.1)
+            #pos_22 = store_ball_position()
+            #rospy.sleep(.1)
+            #pos_23 = store_ball_position()
+            #pos_2[0] = float((pos_2[0] + pos_22[0] + pos_23[0]))/3
+            #pos_2[1] = float((pos_2[1] + pos_22[1] + pos_23[1]))/3
 
             destination = predict_ball_position(pos_1, pos_2)
             mag_destination = math.sqrt(destination[0]**2 + destination[1]**2)
